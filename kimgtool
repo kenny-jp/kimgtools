@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+import argparse
+import math
+import os
+
+from pathlib import Path
+from PIL import Image
+
+__version__='0.9b'
+
+_opt_args = {
+    'resize_w': {
+        'long': '--resize-width',
+        'short': '-rw',
+        'action': 'store',
+        'type': int,
+        'help': 'new image width',
+        'dest': 'width',
+        'metavar': '<width>',
+        'default': None
+    },
+    'resize_h': {
+        'long': '--resize-height',
+        'short': '-rh',
+        'action': 'store',
+        'type': int,
+        'help': 'new image height',
+        'dest': 'height',
+        'metavar': '<height>',
+        'default': None
+    },
+    'destination': {
+        'long': '--destination',
+        'short': '-d',
+        'action': 'store',
+        'type': Path,
+        'help': 'path for saving new image',
+        'dest': 'path',
+        'metavar': '<output_path>',
+        'default': Path('.')
+    }
+}
+
+
+def resize_img(fp, width=None, height=None):
+    if width is None and height is None:
+        return None
+    try:
+        with Image.open(fp) as im:
+            if isinstance(width, int) and isinstance(height, int):
+                return im.resize((width, height))
+            elif isinstance(width, int):
+                height = int(width * (im.height / im.width))
+                return im.resize((width, height))
+            else:
+                width = int(height * (im.width / im.height))
+                return im.resize((width, height))
+    except FileNotFoundError as e:
+        print(f'File no found: {e.filename}')
+        print('abort..')
+        exit()
+
+
+def infos_img(fp):
+    try:
+        with Image.open(fp) as im:
+            print('Path:', im.filename)
+            print('Type:', im.format)
+            img_size = math.ceil(os.path.getsize(fp) / 1024)
+            print(f'Size: {img_size}K')
+            print(f'Dimension: {im.width}x{im.height}')
+            print()
+    except FileNotFoundError as e:
+        print(f'File no found: {e.filename}')
+
+
+def check_only_image(args):
+    kwargs = args._get_kwargs()
+    ret = False
+
+    for arg, v in kwargs:
+        if arg == 'images' and v is not None:
+            ret = True
+            continue
+        if arg == 'path':
+            continue
+        if v is not None:
+            return False
+    return ret
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    for arg in _opt_args:
+        parser.add_argument(
+            _opt_args[arg]['long'],
+            _opt_args[arg]['short'],
+            action=_opt_args[arg]['action'],
+            type=_opt_args[arg]['type'],
+            help=_opt_args[arg]['help'],
+            dest=_opt_args[arg]['dest'],
+            metavar=_opt_args[arg]['metavar'],
+            default=_opt_args[arg]['default']
+        )
+    parser.add_argument('images', nargs='+', type=Path)
+    
+    args = parser.parse_args()
+
+    if check_only_image(args):
+        for im in args.images:
+            infos_img(im)
+
+    if args.width is not None or args.height is not None:
+        for im in args.images:
+            new_im = resize_img(im, width=args.width, height=args.height)
+            name = im.name[:im.name.index('.')] + f'{new_im.width}x{new_im.height}{im.suffix}'
+            path_to_save = args.path.joinpath(name)
+            new_im.save(path_to_save)
+
+
